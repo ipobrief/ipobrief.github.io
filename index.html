@@ -1,1 +1,1135 @@
-<!DOCTYPE html><html><head><meta charset="UTF-8"><title>ipobrief</title></head><body></body></html>
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BTC 비상관 알트코인 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0e17; color: #e0e0e0; font-family: 'Segoe UI', sans-serif; }
+.header { padding: 20px 30px; border-bottom: 1px solid #1a2035; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; }
+.header h1 { font-size: 20px; color: #fff; }
+.header h1 span { color: #f7931a; }
+.controls { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.controls label { font-size: 13px; color: #8892a4; }
+.controls select, .controls input { background: #141a2a; border: 1px solid #2a3450; color: #e0e0e0; padding: 6px 10px; border-radius: 6px; font-size: 13px; }
+.controls button { background: #2563eb; color: #fff; border: none; padding: 8px 18px; border-radius: 6px; cursor: pointer; font-size: 13px; font-weight: 600; }
+.controls button:hover { background: #1d4ed8; }
+.controls button:disabled { background: #333; cursor: not-allowed; }
+.status-bar { padding: 10px 30px; font-size: 13px; color: #8892a4; background: #0d1220; border-bottom: 1px solid #1a2035; }
+.progress-wrap { height: 3px; background: #1a2035; margin-top: 6px; border-radius: 2px; overflow: hidden; }
+.progress-bar { height: 100%; background: #2563eb; width: 0%; transition: width 0.3s; }
+.summary { padding: 16px 30px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px; }
+.summary .stat { background: #141a2a; padding: 10px 16px; border-radius: 8px; border: 1px solid #1e2a40; }
+.summary .stat .val { font-size: 20px; font-weight: 700; color: #fff; }
+.summary .stat .lbl { color: #8892a4; margin-top: 2px; }
+.summary .stat:hover { filter: brightness(1.2); }
+.summary .stat.active { background: #1a2540; filter: brightness(1.3); }
+.coin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: 16px; padding: 20px 30px; }
+.coin-card { background: #111827; border: 1px solid #1e2a40; border-radius: 10px; padding: 16px; }
+.coin-card.highlight { border-color: #f59e0b; }
+.coin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.coin-name { font-size: 16px; font-weight: 700; color: #fff; }
+.coin-name small { font-weight: 400; color: #8892a4; margin-left: 6px; }
+.coin-badges { display: flex; gap: 6px; }
+.badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; position: relative; cursor: help; }
+.badge .tip { display: none; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); background: #1e293b; color: #e2e8f0; padding: 8px 12px; border-radius: 6px; font-size: 11px; font-weight: 400; white-space: nowrap; z-index: 100; margin-top: 6px; border: 1px solid #334155; box-shadow: 0 4px 12px rgba(0,0,0,0.5); pointer-events: none; }
+.badge:hover .tip { display: block; }
+.badge.corr { background: #1e3a5f; color: #60a5fa; }
+.badge.vol-up { background: #14532d; color: #4ade80; }
+.badge.vol-down { background: #451a1a; color: #f87171; }
+.badge.vol-spike { background: #7c2d12; color: #fb923c; animation: pulse 1.5s infinite; }
+.badge.ma-aligned { background: #1e3a1e; color: #86efac; }
+.badge.ma-just { background: #166534; color: #4ade80; animation: pulse 1.5s infinite; font-weight: 700; }
+.badge.oi-squeeze { background: #7c2d12; color: #fb923c; animation: pulse 1.5s infinite; font-weight: 700; }
+.badge.oi-overheat { background: #78350f; color: #fbbf24; }
+.badge.oi-bull { background: #14532d; color: #4ade80; }
+.badge.oi-bear { background: #451a1a; color: #f87171; }
+.badge.oi-neutral { background: #1e293b; color: #94a3b8; }
+.badge.whale { background: #312e81; color: #a5b4fc; }
+.whale-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin-top: 4px; }
+.whale-bar .buy { background: #4ade80; }
+.whale-bar .sell { background: #f87171; }
+.coin-extra { display: flex; gap: 12px; font-size: 11px; color: #8892a4; margin-bottom: 6px; flex-wrap: wrap; align-items: center; }
+.coin-extra .tag { display: flex; flex-direction: column; }
+.coin-extra .v { color: #e0e0e0; font-weight: 600; }
+.score-btn { cursor: pointer; user-select: none; }
+.score-btn:hover { filter: brightness(1.3); }
+.score-popup { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%); background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 20px; z-index: 1000; min-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.7); }
+.score-popup .title { font-size: 16px; font-weight: 700; color: #fff; margin-bottom: 12px; }
+.score-popup table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.score-popup th { text-align: left; color: #8892a4; padding: 6px 0; border-bottom: 1px solid #334155; }
+.score-popup td { padding: 6px 0; border-bottom: 1px solid #1e2a40; }
+.score-popup td:last-child { text-align: right; font-weight: 700; }
+.score-popup .total { border-top: 2px solid #475569; font-size: 15px; font-weight: 700; }
+.score-popup .close { position: absolute; top: 10px; right: 14px; color: #8892a4; cursor: pointer; font-size: 18px; }
+.score-popup .close:hover { color: #fff; }
+.score-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 999; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.6; } }
+.coin-card.vol-spike { border-color: #f97316; box-shadow: 0 0 12px rgba(249,115,22,0.3); }
+.coin-stats { display: flex; gap: 16px; font-size: 12px; color: #8892a4; margin-bottom: 8px; flex-wrap: wrap; }
+.coin-stats span { display: flex; flex-direction: column; }
+.coin-stats .v { color: #e0e0e0; font-weight: 600; }
+.chart-wrap { height: 180px; position: relative; }
+.no-results { text-align: center; padding: 60px 30px; color: #8892a4; font-size: 15px; }
+.table-view { padding: 0 30px 30px; overflow-x: auto; }
+.table-view table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.table-view th { text-align: left; padding: 10px 12px; color: #8892a4; border-bottom: 1px solid #1e2a40; cursor: pointer; user-select: none; }
+.table-view th:hover { color: #fff; }
+.table-view td { padding: 10px 12px; border-bottom: 1px solid #111827; }
+.table-view tr:hover td { background: #141a2a; }
+.pos { color: #4ade80; } .neg { color: #f87171; }
+.view-toggle { display: flex; gap: 4px; }
+.view-toggle button { background: #141a2a; border: 1px solid #2a3450; color: #8892a4; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+.view-toggle button.active { background: #2563eb; color: #fff; border-color: #2563eb; }
+</style>
+</head>
+<body>
+<div class="header">
+  <h1><span>₿</span> BTC 비상관 알트코인 스캐너</h1>
+  <div class="controls">
+    <label>기간</label>
+    <select id="period">
+      <option value="7">7일</option>
+      <option value="14">14일</option>
+      <option value="30" selected>30일</option>
+      <option value="90">90일</option>
+    </select>
+    <label>상관계수 ≤</label>
+    <input type="number" id="corrThreshold" value="1" min="-1" max="1" step="0.05" style="width:70px">
+    <label>최소 거래대금(M$)</label>
+    <input type="number" id="minVolume" value="1" min="0" step="1" style="width:70px">
+    <label>거래량 급등 ≥</label>
+    <input type="number" id="volSpikeThreshold" value="200" min="50" step="50" style="width:70px">
+    <label>%</label>
+    <div class="view-toggle">
+      <button class="active" onclick="setView('card')">카드</button>
+      <button onclick="setView('table')">테이블</button>
+    </div>
+    <button id="scanBtn" onclick="startScan()">스캔 시작</button>
+    <span style="color:#334155;font-size:18px">|</span>
+    <input type="text" id="searchCoin" placeholder="코인 검색 (예: SOL)" style="width:120px;text-transform:uppercase" onkeydown="if(event.key==='Enter')searchCoin()">
+    <button onclick="searchCoin()">분석</button>
+    <span style="color:#334155;font-size:18px">|</span>
+    <input type="password" id="etherscanKey" placeholder="⛓️ Etherscan 키 (선택)" style="width:140px" onchange="saveEtherscanKey()" title="입력 시 거래량 급등 종목의 거래소 순입출금(온체인) 추적">
+  </div>
+</div>
+<div class="status-bar">
+  <span id="statusText">스캔 버튼을 눌러 시작하세요</span>
+  <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+</div>
+<div class="summary" id="summaryArea"></div>
+<div class="coin-grid" id="cardView"></div>
+<div class="table-view" id="tableView" style="display:none"></div>
+<div class="score-overlay" id="scoreOverlay" onclick="closeScorePopup()"></div>
+<div class="score-popup" id="scorePopup"><span class="close" onclick="closeScorePopup()">✕</span><div id="scoreContent"></div></div>
+
+<script>
+const BINANCE_API = 'https://api.binance.com/api/v3';
+const FUTURES_API = 'https://fapi.binance.com/fapi/v1';
+let currentView = 'card';
+let results = [];
+let volPeriodLabel = '30일';
+let chartInstances = {};
+let altSeasonData = null;
+
+// ─── 온체인 거래소 순입출금 (Etherscan V2) ───
+let etherscanKey = localStorage.getItem('etherscan_key') || '';
+let coinPlatforms = null; // CoinGecko 심볼→컨트랙트 매핑 캐시
+
+function saveEtherscanKey() {
+  etherscanKey = document.getElementById('etherscanKey').value.trim();
+  localStorage.setItem('etherscan_key', etherscanKey);
+  document.getElementById('statusText').textContent = etherscanKey ? '⛓️ Etherscan 키 저장됨 — 다음 스캔부터 거래량 급등 종목 온체인 추적' : 'Etherscan 키 제거됨';
+}
+
+// 체인별 설정: chainid + 바이낸스 핫월렛 + CoinGecko platform 키
+const CHAINS = [
+  { id: 1, cg: 'ethereum', wallets: [
+    '0x28C6c06298d514Db089934071355E5743bf21d60','0x21a31Ee1afC51d94C2eFcCAa2092aD1028285549',
+    '0xDFd5293D8e347dFe59E90eFd55b2956a1343963d','0xF977814e90dA44bFA03b6295A0616a897441aceC' ] },
+  { id: 56, cg: 'binance-smart-chain', wallets: [
+    '0x8894E0a0c962CB723c1976a4421c95949bE2D4E3','0xF977814e90dA44bFA03b6295A0616a897441aceC',
+    '0x5a52E96BAcdaBb82fd05763E25335261B270Efcb' ] },
+];
+
+// 체인 약어 매핑
+const CHAIN_LABELS = {
+  'ethereum':'ETH','binance-smart-chain':'BSC','solana':'SOL','polygon-pos':'POL',
+  'arbitrum-one':'ARB','avalanche':'AVAX','optimistic-ethereum':'OP','base':'BASE',
+  'sui':'SUI','aptos':'APT','tron':'TRX','the-open-network':'TON','near-protocol':'NEAR',
+  'cardano':'ADA','cosmos':'ATOM','sei-network':'SEI','hyperliquid':'HYPE',
+  'stellar':'XLM','algorand':'ALGO','fantom':'FTM','zksync':'zkSync','linea':'LINEA',
+  'blast':'BLAST','mantle':'MNT','celo':'CELO','gnosis':'GNO','moonbeam':'GLMR',
+};
+const CHAIN_PRIORITY = ['ethereum','solana','binance-smart-chain','base','arbitrum-one','sui','aptos','tron','the-open-network','polygon-pos'];
+
+// L1 네이티브 코인 (자기 이름이 곧 체인)
+const NATIVE_CHAIN = {
+  ETH:'ETH', BNB:'BNB', SOL:'SOL', ADA:'ADA', AVAX:'AVAX', DOT:'DOT', NEAR:'NEAR',
+  ATOM:'ATOM', APT:'APT', SUI:'SUI', TON:'TON', TRX:'TRX', MATIC:'POL', POL:'POL',
+  FTM:'FTM', S:'SONIC', ALGO:'ALGO', XLM:'XLM', SEI:'SEI', HBAR:'HBAR', EGLD:'EGLD',
+  FLOW:'FLOW', KAVA:'KAVA', INJ:'INJ', TIA:'TIA', ARB:'ARB', OP:'OP', BERA:'BERA',
+  HYPE:'HYPE', KAS:'KAS', ICP:'ICP', FIL:'FIL', ROSE:'ROSE', MNT:'MNT', RUNE:'RUNE',
+};
+
+// 코인의 주요 체인 약어 (최대 2개)
+function getCoinChains(base) {
+  const B = base.toUpperCase();
+  if (NATIVE_CHAIN[B]) return [NATIVE_CHAIN[B]]; // L1 네이티브 우선
+  if (!coinPlatforms) return [];
+  const p = coinPlatforms[B];
+  if (!p) return [];
+  const chains = Object.keys(p).filter(k => k[0] !== '_' && p[k]); // 컨트랙트 있는 체인
+  if (!chains.length) return [];
+  chains.sort((a,b) => {
+    const ia = CHAIN_PRIORITY.indexOf(a), ib = CHAIN_PRIORITY.indexOf(b);
+    return (ia<0?99:ia) - (ib<0?99:ib);
+  });
+  return chains.slice(0,2).map(c => CHAIN_LABELS[c] || c.slice(0,4).toUpperCase());
+}
+
+// CoinGecko 토큰 컨트랙트 매핑 로드 (1회, 1일 캐시)
+async function loadCoinPlatforms() {
+  if (coinPlatforms) return coinPlatforms;
+  const cached = JSON.parse(localStorage.getItem('cg_platforms') || 'null');
+  if (cached && Date.now() - cached.t < 86400000) { coinPlatforms = cached.d; return coinPlatforms; }
+  const list = await fetchJSON('https://api.coingecko.com/api/v3/coins/list?include_platform=true');
+  const map = {};
+  for (const c of list) {
+    const sym = (c.symbol || '').toUpperCase();
+    if (!sym || !c.platforms) continue;
+    const cnt = Object.values(c.platforms).filter(Boolean).length;
+    if (!map[sym] || cnt > map[sym]._cnt) map[sym] = { ...c.platforms, _cnt: cnt, _id: c.id };
+  }
+  coinPlatforms = map;
+  localStorage.setItem('cg_platforms', JSON.stringify({ t: Date.now(), d: map }));
+  return map;
+}
+
+// 특정 코인의 7일 거래소 순입출금 (USD)
+async function getOnchainFlow(base, price) {
+  if (!etherscanKey) return null;
+  try {
+    const platforms = await loadCoinPlatforms();
+    const p = platforms[base.toUpperCase()];
+    if (!p) return null;
+    const cutoff = Math.floor(Date.now()/1000) - 7*86400;
+    let totalIn = 0, totalOut = 0, found = false, decimals = 18;
+    const known = new Set(CHAINS.flatMap(c => c.wallets.map(w => w.toLowerCase())));
+    const recvMap = {}; // 거래소에서 받아간 지갑 (매집 주체)
+    const sendMap = {}; // 거래소로 보낸 지갑 (매도 주체)
+    let ethContract = p.ethereum;
+
+    for (const chain of CHAINS) {
+      const contract = p[chain.cg];
+      if (!contract) continue;
+      for (const w of chain.wallets) {
+        const url = `https://api.etherscan.io/v2/api?chainid=${chain.id}&module=account&action=tokentx&contractaddress=${contract}&address=${w}&page=1&offset=1000&sort=desc&apikey=${etherscanKey}`;
+        try {
+          const data = await fetchJSON(url);
+          if (data.status !== '1' || !Array.isArray(data.result)) continue;
+          found = true;
+          const dec = data.result[0] ? +data.result[0].tokenDecimal : 18;
+          if (chain.id === 1) decimals = dec;
+          const wl = w.toLowerCase();
+          for (const tx of data.result) {
+            if (+tx.timeStamp < cutoff) break;
+            const val = +tx.value / Math.pow(10, dec);
+            const to = tx.to.toLowerCase(), from = tx.from.toLowerCase();
+            if (to === wl) { // 거래소 유입
+              totalIn += val;
+              if (chain.id === 1 && !known.has(from)) sendMap[from] = (sendMap[from]||0) + val;
+            } else if (from === wl) { // 거래소 유출
+              totalOut += val;
+              if (chain.id === 1 && !known.has(to)) recvMap[to] = (recvMap[to]||0) + val;
+            }
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 220));
+      }
+    }
+    if (!found) return null;
+    const netOutTokens = totalOut - totalIn;
+    const netOutUsd = netOutTokens * price;
+
+    // 시총 조회 (CoinGecko)
+    let mcap = 0;
+    try {
+      if (p._id) {
+        const mc = await fetchJSON(`https://api.coingecko.com/api/v3/simple/price?ids=${p._id}&vs_currencies=usd&include_market_cap=true`);
+        mcap = mc[p._id]?.usd_market_cap || 0;
+      }
+    } catch {}
+    const pctMcap = mcap > 0 ? (Math.abs(netOutUsd) / mcap * 100) : null;
+
+    // 큰손 추적: 매집이면 수신지갑, 매도면 송신지갑 (ETH 체인)
+    let whales = [];
+    if (ethContract) {
+      const targetMap = netOutTokens >= 0 ? recvMap : sendMap;
+      const top = Object.entries(targetMap).sort((a,b) => b[1]-a[1]).slice(0,3);
+      if (top.length) {
+        // 총공급 조회
+        let supply = 0;
+        try {
+          const s = await fetchJSON(`https://api.etherscan.io/v2/api?chainid=1&module=stats&action=tokensupply&contractaddress=${ethContract}&apikey=${etherscanKey}`);
+          supply = +s.result / Math.pow(10, decimals);
+        } catch {}
+        await new Promise(r => setTimeout(r, 220));
+        for (const [addr, amt] of top) {
+          let bal = 0;
+          try {
+            const b = await fetchJSON(`https://api.etherscan.io/v2/api?chainid=1&module=account&action=tokenbalance&contractaddress=${ethContract}&address=${addr}&tag=latest&apikey=${etherscanKey}`);
+            bal = +b.result / Math.pow(10, decimals);
+          } catch {}
+          const pct = supply > 0 ? bal/supply*100 : 0;
+          whales.push({ addr, amtUsd: amt*price, balPct: pct, isWhale: pct >= 0.3 });
+          await new Promise(r => setTimeout(r, 220));
+        }
+      }
+    }
+
+    return { netOutUsd, inUsd: totalIn*price, outUsd: totalOut*price, mcap, pctMcap, whales, side: netOutTokens>=0?'recv':'send' };
+  } catch { return null; }
+}
+
+// watchlist: [{symbol, date, price}] — 기존 문자열 배열 마이그레이션
+let watchlist = (JSON.parse(localStorage.getItem('btc_watchlist') || '[]')).map(w =>
+  typeof w === 'string' ? { symbol: w, date: null, price: null } : w
+);
+
+function isWatched(symbol) { return watchlist.some(w => w.symbol === symbol); }
+function getWatch(symbol) { return watchlist.find(w => w.symbol === symbol); }
+
+function toggleWatch(symbol, price, ev) {
+  if (ev) ev.stopPropagation();
+  const idx = watchlist.findIndex(w => w.symbol === symbol);
+  if (idx >= 0) watchlist.splice(idx, 1);
+  else {
+    const now = new Date();
+    const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    watchlist.push({ symbol, date: dateStr, price });
+  }
+  localStorage.setItem('btc_watchlist', JSON.stringify(watchlist));
+
+  // 관심종목 필터 보는 중이면 다시 필터링, 아니면 현재 화면 별표만 갱신
+  if (activeFilter === 'watch') {
+    renderResults(allScanResults.filter(r => isWatched(r.symbol)));
+  } else {
+    renderResults(lastRendered);
+  }
+  // 관심종목 카운트 갱신
+  const cntEl = document.getElementById('watchCount');
+  if (cntEl) cntEl.textContent = allScanResults.filter(r => isWatched(r.symbol)).length;
+}
+
+// 알트장 신호 분석 (CoinGecko 무료 API)
+async function fetchAltSeasonSignal() {
+  try {
+    const [global, markets] = await Promise.all([
+      fetchJSON('https://api.coingecko.com/api/v3/global'),
+      fetchJSON('https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=bitcoin,ethereum,tether')
+    ]);
+
+    const totalNow = global.data.total_market_cap.usd;
+    const btc = markets.find(m => m.id === 'bitcoin');
+    const eth = markets.find(m => m.id === 'ethereum');
+    const usdt = markets.find(m => m.id === 'tether');
+
+    const btcMcap = btc.market_cap, ethMcap = eth.market_cap, usdtMcap = usdt.market_cap;
+    const btcChg = btc.market_cap_change_percentage_24h || 0;
+    const ethChg = eth.market_cap_change_percentage_24h || 0;
+    const usdtChg = usdt.market_cap_change_percentage_24h || 0;
+    const totalChg = global.data.market_cap_change_percentage_24h_usd || 0;
+
+    // 24시간 전 시총 역산
+    const totalPrev = totalNow / (1 + totalChg/100);
+    const btcPrev = btcMcap / (1 + btcChg/100);
+    const ethPrev = ethMcap / (1 + ethChg/100);
+    const usdtPrev = usdtMcap / (1 + usdtChg/100);
+
+    // 도미넌스 (현재 vs 24h 전)
+    const btcD_now = btcMcap / totalNow * 100;
+    const btcD_prev = btcPrev / totalPrev * 100;
+    const usdtD_now = usdtMcap / totalNow * 100;
+    const usdtD_prev = usdtPrev / totalPrev * 100;
+
+    // TOTAL3 (BTC, ETH 제외 알트 시총)
+    const total3_now = totalNow - btcMcap - ethMcap;
+    const total3_prev = totalPrev - btcPrev - ethPrev;
+    const total3Chg = (total3_now - total3_prev) / total3_prev * 100;
+
+    const btcDChg = btcD_now - btcD_prev;
+    const usdtDChg = usdtD_now - usdtD_prev;
+
+    // 신호 판정
+    const usdtDown = usdtDChg < 0;   // 현금이 코인으로
+    const total3Up = total3Chg > 0;  // 알트로 유입
+    const btcDDown = btcDChg < 0;    // 비트→알트 순환
+
+    const bullCount = (usdtDown?1:0) + (total3Up?1:0) + (btcDDown?1:0);
+    let verdict, verdictCls;
+    if (bullCount === 3) { verdict = '🔥 알트장 ON'; verdictCls = 'alt-on'; }
+    else if (bullCount === 2) { verdict = '🟢 알트 우호적'; verdictCls = 'alt-good'; }
+    else if (bullCount === 1) { verdict = '🟡 중립'; verdictCls = 'alt-neutral'; }
+    else { verdict = '🔴 알트장 OFF'; verdictCls = 'alt-off'; }
+
+    altSeasonData = {
+      btcD_now, btcDChg, usdtD_now, usdtDChg, total3Chg,
+      total3_now, usdtDown, total3Up, btcDDown,
+      bullCount, verdict, verdictCls
+    };
+    // summary 영역의 알트장 버튼 갱신
+    if (allScanResults.length) renderSummary(allScanResults, lastScanTotal);
+    return altSeasonData;
+  } catch(e) {
+    altSeasonData = null;
+    return null;
+  }
+}
+
+function showAltSeason() {
+  if (!altSeasonData) { alert('알트장 데이터를 불러오는 중입니다. 잠시 후 다시 시도하세요.'); return; }
+  const a = altSeasonData;
+  const arrow = (v) => v < 0 ? '▼' : '▲';
+  const col = (good) => good ? '#4ade80' : '#f87171';
+  document.getElementById('scoreContent').innerHTML = `
+    <span class="close" onclick="closeScorePopup()">✕</span>
+    <div class="title">📊 알트장 신호 분석</div>
+    <div style="font-size:22px;font-weight:800;margin-bottom:6px;color:${a.verdictCls==='alt-on'?'#4ade80':a.verdictCls==='alt-good'?'#86efac':a.verdictCls==='alt-neutral'?'#fbbf24':'#f87171'}">${a.verdict}</div>
+    <div style="font-size:12px;color:#8892a4;margin-bottom:14px">3개 지표 중 ${a.bullCount}개 충족</div>
+    <table>
+      <tr><th>지표</th><th style="text-align:right">변화(24h)</th><th style="text-align:right">신호</th></tr>
+      <tr>
+        <td>USDT.D<br><span style="font-size:11px;color:#8892a4">테더 도미넌스</span></td>
+        <td style="text-align:right;color:${col(a.usdtDown)}">${arrow(a.usdtDChg)} ${Math.abs(a.usdtDChg).toFixed(3)}%p<br><span style="font-size:11px;color:#8892a4">현재 ${a.usdtD_now.toFixed(2)}%</span></td>
+        <td style="text-align:right">${a.usdtDown ? '✅ 현금→코인 유입' : '❌ 현금 대기'}</td>
+      </tr>
+      <tr>
+        <td>BTC.D<br><span style="font-size:11px;color:#8892a4">비트 도미넌스</span></td>
+        <td style="text-align:right;color:${col(a.btcDDown)}">${arrow(a.btcDChg)} ${Math.abs(a.btcDChg).toFixed(3)}%p<br><span style="font-size:11px;color:#8892a4">현재 ${a.btcD_now.toFixed(2)}%</span></td>
+        <td style="text-align:right">${a.btcDDown ? '✅ 비트→알트 순환' : '❌ 비트 강세'}</td>
+      </tr>
+      <tr>
+        <td>TOTAL3<br><span style="font-size:11px;color:#8892a4">알트 시총(BTC·ETH 제외)</span></td>
+        <td style="text-align:right;color:${col(a.total3Up)}">${a.total3Chg >= 0 ? '▲' : '▼'} ${Math.abs(a.total3Chg).toFixed(2)}%<br><span style="font-size:11px;color:#8892a4">$${fmtNum(a.total3_now)}</span></td>
+        <td style="text-align:right">${a.total3Up ? '✅ 알트로 유입' : '❌ 알트 유출'}</td>
+      </tr>
+    </table>
+    <div style="font-size:11px;color:#64748b;margin-top:12px;line-height:1.5">
+      • USDT.D ↓ = 현금이 코인시장으로 유입<br>
+      • BTC.D ↓ = 비트에서 알트로 순환<br>
+      • TOTAL3 ↑ = 알트로 자금 유입<br>
+      <span style="color:#475569">데이터: CoinGecko · 24시간 도미넌스 변화 기준</span>
+    </div>`;
+  document.getElementById('scoreOverlay').style.display = 'block';
+  document.getElementById('scorePopup').style.display = 'block';
+}
+
+function setView(v) {
+  currentView = v;
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.view-toggle button:nth-child(${v === 'card' ? 1 : 2})`).classList.add('active');
+  document.getElementById('cardView').style.display = v === 'card' ? 'grid' : 'none';
+  document.getElementById('tableView').style.display = v === 'table' ? 'block' : 'none';
+  if (results.length) renderResults(results);
+}
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+function pearsonCorrelation(x, y) {
+  const n = Math.min(x.length, y.length);
+  if (n < 5) return null;
+  const xs = x.slice(-n), ys = y.slice(-n);
+  const mx = xs.reduce((a,b) => a+b, 0) / n;
+  const my = ys.reduce((a,b) => a+b, 0) / n;
+  let num = 0, dx2 = 0, dy2 = 0;
+  for (let i = 0; i < n; i++) {
+    const dx = xs[i] - mx, dy = ys[i] - my;
+    num += dx * dy; dx2 += dx*dx; dy2 += dy*dy;
+  }
+  const den = Math.sqrt(dx2 * dy2);
+  return den === 0 ? 0 : num / den;
+}
+
+function toReturns(prices) {
+  const r = [];
+  for (let i = 1; i < prices.length; i++) r.push((prices[i] - prices[i-1]) / prices[i-1]);
+  return r;
+}
+
+async function getKlines(symbol, interval, limit) {
+  // 선물(Perpetual) 우선 — 선물 위주 트레이딩이므로. 선물 없으면 현물 fallback
+  const mapK = data => data.map(k => ({ time: k[0], open: +k[1], high: +k[2], low: +k[3], close: +k[4], volume: +k[5], quoteVol: +k[7] }));
+  try {
+    const fut = await fetchJSON(`https://fapi.binance.com/fapi/v1/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    if (fut && fut.length) return mapK(fut);
+  } catch {}
+  const data = await fetchJSON(`${BINANCE_API}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+  return mapK(data);
+}
+
+// OI + 펀딩비 조회 (선물 마켓)
+async function getFuturesData(symbol) {
+  try {
+    const [oiData, frData, oiHist] = await Promise.all([
+      fetchJSON(`${FUTURES_API}/openInterest?symbol=${symbol}`),
+      fetchJSON(`${FUTURES_API}/premiumIndex?symbol=${symbol}`),
+      fetchJSON(`https://fapi.binance.com/futures/data/openInterestHist?symbol=${symbol}&period=1d&limit=2`)
+    ]);
+    const oi = +oiData.openInterest;
+    const fundingRate = +(frData.lastFundingRate || 0);
+    // OI 변화율
+    let oiChgPct = 0;
+    if (oiHist.length >= 2) {
+      const prevOI = +oiHist[0].sumOpenInterest;
+      const curOI = +oiHist[1].sumOpenInterest;
+      oiChgPct = prevOI > 0 ? ((curOI - prevOI) / prevOI) * 100 : 0;
+    }
+    return { oi, fundingRate, oiChgPct, hasFutures: true };
+  } catch {
+    return { oi: 0, fundingRate: 0, oiChgPct: 0, hasFutures: false };
+  }
+}
+
+// 대형 주문 비중 분석 (최근 체결 내역)
+async function getWhaleRatio(symbol, lastPrice) {
+  try {
+    const trades = await fetchJSON(`${BINANCE_API}/trades?symbol=${symbol}&limit=500`);
+    const WHALE_THRESHOLD = 1000; // $1,000 이상 = 대형 주문
+    let totalVol = 0, whaleVol = 0, whaleCount = 0;
+    trades.forEach(t => {
+      const qty = +t.qty;
+      const price = +t.price;
+      const value = qty * price;
+      totalVol += value;
+      if (value >= WHALE_THRESHOLD) { whaleVol += value; whaleCount++; }
+    });
+    const whaleRatio = totalVol > 0 ? (whaleVol / totalVol) * 100 : 0;
+    // 매수/매도 구분 (isBuyerMaker=false → 시장가 매수)
+    let whaleBuyVol = 0, whaleSellVol = 0;
+    trades.forEach(t => {
+      const value = (+t.qty) * (+t.price);
+      if (value >= WHALE_THRESHOLD) {
+        if (!t.isBuyerMaker) whaleBuyVol += value; else whaleSellVol += value;
+      }
+    });
+    return { whaleRatio, whaleCount, whaleBuyVol, whaleSellVol, totalTrades: trades.length };
+  } catch {
+    return { whaleRatio: 0, whaleCount: 0, whaleBuyVol: 0, whaleSellVol: 0, totalTrades: 0 };
+  }
+}
+
+// 펀딩비 상태 라벨 (8시간당 기준)
+function getFundingLabel(fr) {
+  const pct = fr * 100; // % 단위
+  if (pct >= 0.1) return { txt: '심한 과열', color: '#f87171' };
+  if (pct >= 0.05) return { txt: '과열', color: '#fb923c' };
+  if (pct >= 0.03) return { txt: '약과열', color: '#fbbf24' };
+  if (pct > 0.012) return { txt: '롱 우세', color: '#86efac' };
+  if (pct >= 0.008) return { txt: '중립', color: '#94a3b8' };
+  if (pct >= 0) return { txt: '롱 약세', color: '#94a3b8' };
+  if (pct >= -0.03) return { txt: '숏 우세', color: '#60a5fa' };
+  return { txt: '숏 과열', color: '#a78bfa' };
+}
+
+// OI + 펀딩비 시그널 판정
+function getOISignal(oiChgPct, fundingRate, todayReturn) {
+  if (oiChgPct <= -5) return { label: '포지션 정리', emoji: '😐', cls: 'oi-neutral' };
+  if (oiChgPct >= 5 && fundingRate < -0.0005) return { label: '숏스퀴즈 가능', emoji: '🔥', cls: 'oi-squeeze' };
+  if (oiChgPct >= 5 && fundingRate > 0.001) return { label: '롱 과열', emoji: '⚠️', cls: 'oi-overheat' };
+  if (oiChgPct >= 5 && fundingRate > 0) return { label: '강세', emoji: '🟢', cls: 'oi-bull' };
+  if (oiChgPct >= 5 && fundingRate < 0) return { label: '약세', emoji: '🔴', cls: 'oi-bear' };
+  return { label: '', emoji: '', cls: '' };
+}
+
+async function getUSDTSymbols() {
+  const info = await fetchJSON(`${BINANCE_API}/exchangeInfo`);
+  return info.symbols
+    .filter(s => {
+      const b = s.baseAsset;
+      const stables = ['USDC','BUSD','DAI','TUSD','USDP','FDUSD','PYUSD','EUR','GBP','AEUR','EURI','USD1','XUSD','USDD','FRAX','LUSD','GUSD','SUSD','CUSD','BIDR','IDRT','UAH','BRL','TRY','ARS','PLN','RON','ZAR','NGN','BFUSD','RLUSD','USDE','UST','USDJ','USDK','USDX','ZUSD','HUSD','USDS','USDG','PAXG','XAUT','U'];
+      return s.quoteAsset === 'USDT' && s.status === 'TRADING'
+        && !b.endsWith('UP') && !b.endsWith('DOWN') && !b.endsWith('BEAR') && !b.endsWith('BULL')
+        && !stables.includes(b);
+    })
+    .map(s => ({ symbol: s.symbol, base: s.baseAsset }));
+}
+
+async function startScan() {
+  const btn = document.getElementById('scanBtn');
+  btn.disabled = true;
+  btn.textContent = '스캔 중...';
+  fetchAltSeasonSignal(); // 알트장 신호 백그라운드 로딩
+  loadCoinPlatforms().then(() => { if (lastRendered.length) renderResults(lastRendered); }).catch(()=>{}); // 체인 정보 백그라운드 로딩
+  const statusEl = document.getElementById('statusText');
+  const progressEl = document.getElementById('progressBar');
+  const period = +document.getElementById('period').value;
+  volPeriodLabel = period + '일';
+  const corrThreshold = +document.getElementById('corrThreshold').value;
+  const minVol = +document.getElementById('minVolume').value * 1e6;
+  const volSpikeThreshold = +document.getElementById('volSpikeThreshold').value;
+
+  try {
+    statusEl.textContent = '거래 가능 심볼 로딩 중...';
+    const allSymbols = await getUSDTSymbols();
+
+    statusEl.textContent = `BTC 데이터 로딩 중...`;
+    const btcKlines = await getKlines('BTCUSDT', '1d', period + 1);
+    const btcReturns = toReturns(btcKlines.map(k => k.close));
+
+    // pre-filter by 24h volume
+    statusEl.textContent = '24시간 거래량으로 사전 필터링 중...';
+    const tickers = await fetchJSON(`${BINANCE_API}/ticker/24hr`);
+    const tickerMap = {};
+    tickers.forEach(t => { tickerMap[t.symbol] = +t.quoteVolume; });
+
+    const candidates = allSymbols.filter(s => s.symbol !== 'BTCUSDT' && (tickerMap[s.symbol] || 0) >= minVol);
+    statusEl.textContent = `${candidates.length}개 후보 코인 분석 중...`;
+
+    results = [];
+    const batchSize = 5;
+    for (let i = 0; i < candidates.length; i += batchSize) {
+      const batch = candidates.slice(i, i + batchSize);
+      const promises = batch.map(async (s) => {
+        try {
+          const klines = await getKlines(s.symbol, '1d', period + 1);
+          if (klines.length < 10) return null;
+          const returns = toReturns(klines.map(k => k.close));
+          const corr = pearsonCorrelation(btcReturns, returns);
+          if (corr === null || Math.abs(corr) > corrThreshold) return null;
+
+          const lastPrice = klines[klines.length-1].close;
+          const firstPrice = klines[0].close;
+          const chgPct = ((lastPrice - firstPrice) / firstPrice) * 100;
+
+          // 거래량 급등 분석: 최근 3일 평균 vs 선택 기간 평균
+          const vols = klines.map(k => k.volume);
+          const recent3 = vols.slice(-3);
+          const prevN = vols.slice(-(period+3), -3);
+          const avg3 = recent3.reduce((a,b) => a+b, 0) / recent3.length;
+          const avg30 = prevN.length >= 3 ? prevN.reduce((a,b) => a+b, 0) / prevN.length : 0;
+          const volSpikePct = avg30 > 0 ? ((avg3 - avg30) / avg30) * 100 : 0;
+          const hasVolSpike = volSpikePct >= volSpikeThreshold;
+
+          const vol24h = tickerMap[s.symbol] || 0;
+          const avgDailyVol = vols.reduce((a,b) => a+b, 0) / vols.length;
+
+          // 3일 평균 손익 계산
+          const closes = klines.map(k => k.close);
+          const last3Returns = [];
+          for (let j = closes.length - 3; j < closes.length; j++) {
+            if (j > 0) last3Returns.push((closes[j] - closes[j-1]) / closes[j-1] * 100);
+          }
+          const avg3Return = last3Returns.length ? last3Returns.reduce((a,b) => a+b, 0) / last3Returns.length : 0;
+
+          // 오늘 수익률
+          const todayReturn = closes.length >= 2 ? (closes[closes.length-1] - closes[closes.length-2]) / closes[closes.length-2] * 100 : 0;
+
+          // 이평선 정배열 체크 (5MA > 10MA > 20MA)
+          const calcMA = (arr, period) => {
+            if (arr.length < period) return null;
+            const slice = arr.slice(-period);
+            return slice.reduce((a,b) => a+b, 0) / period;
+          };
+          const ma5 = calcMA(closes, 5);
+          const ma10 = calcMA(closes, 10);
+          const ma20 = calcMA(closes, 20);
+          const maAligned = (ma5 !== null && ma10 !== null && ma20 !== null) && (ma5 > ma10 && ma10 > ma20);
+          // 최근 전환 감지: 어제 기준으로는 정배열이 아니었는지
+          const closesYd = closes.slice(0, -1);
+          const ma5y = calcMA(closesYd, 5);
+          const ma10y = calcMA(closesYd, 10);
+          const ma20y = calcMA(closesYd, 20);
+          const maAlignedYd = (ma5y !== null && ma10y !== null && ma20y !== null) && (ma5y > ma10y && ma10y > ma20y);
+          const maJustAligned = maAligned && !maAlignedYd; // 오늘 막 정배열 전환
+
+          // OI + 펀딩비 + 대형주문 분석
+          const [futuresData, whaleData] = await Promise.all([
+            getFuturesData(s.symbol),
+            getWhaleRatio(s.symbol, lastPrice)
+          ]);
+          const oiSignal = futuresData.hasFutures ? getOISignal(futuresData.oiChgPct, futuresData.fundingRate, todayReturn) : { label: '', emoji: '', cls: '' };
+
+          return {
+            symbol: s.symbol, base: s.base, corr, klines,
+            lastPrice, chgPct, vol24h, avgDailyVol,
+            avg3Vol: avg3, avg30Vol: avg30, volSpikePct, hasVolSpike,
+            avg3Return, todayReturn, maAligned, maJustAligned, ma5, ma10, ma20,
+            ...futuresData, oiSignal, ...whaleData
+          };
+        } catch { return null; }
+      });
+      const batchResults = await Promise.all(promises);
+      batchResults.forEach(r => { if (r) results.push(r); });
+      progressEl.style.width = Math.min(100, ((i + batchSize) / candidates.length * 100)).toFixed(0) + '%';
+      statusEl.textContent = `분석 중... ${Math.min(i + batchSize, candidates.length)}/${candidates.length} (발견: ${results.length}개)`;
+    }
+
+    // 상승 가능성 점수 계산
+    results.forEach(r => {
+      const sd = {}; // score detail
+
+      // 오늘 수익률 (15점)
+      if (r.todayReturn >= 10) sd.today = 15;
+      else if (r.todayReturn >= 5) sd.today = 12;
+      else if (r.todayReturn >= 0) sd.today = 5;
+      else if (r.todayReturn >= -5) sd.today = -3;
+      else sd.today = -10;
+
+      // 3일 평균 손익 (20점)
+      if (r.avg3Return >= 10) sd.avg3 = 20;
+      else if (r.avg3Return >= 5) sd.avg3 = 16;
+      else if (r.avg3Return >= 2) sd.avg3 = 12;
+      else if (r.avg3Return >= 0) sd.avg3 = 5;
+      else if (r.avg3Return >= -3) sd.avg3 = -3;
+      else sd.avg3 = -10;
+
+      // 이평선 정배열 (15점)
+      if (r.maJustAligned) sd.ma = 15;
+      else if (r.maAligned) sd.ma = 10;
+      else sd.ma = 0;
+
+      // 거래량 급등 (15점)
+      if (r.volSpikePct >= 200) sd.vol = 15;
+      else if (r.volSpikePct >= 100) sd.vol = 10;
+      else if (r.volSpikePct >= 50) sd.vol = 5;
+      else if (r.volSpikePct < -30) sd.vol = -5;
+      else sd.vol = 0;
+
+      // OI 증가 (10점)
+      sd.oi = 0;
+      if (r.hasFutures) {
+        if (r.oiChgPct >= 10) sd.oi = 10;
+        else if (r.oiChgPct >= 5) sd.oi = 7;
+        else if (r.oiChgPct >= 0) sd.oi = 3;
+        else sd.oi = -3;
+      }
+
+      // 펀딩비 방향 (10점)
+      sd.fr = 0;
+      if (r.hasFutures) {
+        const fr = r.fundingRate;
+        if (fr > 0 && fr <= 0.001) sd.fr = 10;
+        else if (fr > 0.001) sd.fr = -5;
+        else if (fr < -0.0005) sd.fr = 5;
+        else if (fr < 0) sd.fr = 2;
+      }
+
+      // 숏스퀴즈 가능 (10점)
+      sd.squeeze = r.oiSignal.cls === 'oi-squeeze' ? 10 : 0;
+
+      // 고래 비중 (5점)
+      if (r.whaleRatio >= 50) sd.whale = 5;
+      else if (r.whaleRatio >= 30) sd.whale = 3;
+      else if (r.whaleRatio >= 10) sd.whale = 1;
+      else sd.whale = 0;
+
+      r.scoreDetail = sd;
+      r.bullScore = sd.today + sd.avg3 + sd.ma + sd.vol + sd.oi + sd.fr + sd.squeeze + sd.whale;
+
+      // 강한 매수 우세 판정: OI 증가 + 펀딩비 양수 (가격 무관)
+      r.strongBuy = r.hasFutures && r.oiChgPct >= 5 && r.fundingRate > 0;
+      // 강한 숏 판정: OI 증가 + 펀딩비 숏우세(음수) (가격 무관)
+      r.strongShort = r.hasFutures && r.oiChgPct >= 5 && r.fundingRate < 0;
+    });
+
+    // 강한 매수 우세 → 숏스퀴즈 → 점수순 정렬
+    results.sort((a,b) => {
+      const aRank = a.strongBuy ? 2 : a.oiSignal.cls === 'oi-squeeze' ? 1 : 0;
+      const bRank = b.strongBuy ? 2 : b.oiSignal.cls === 'oi-squeeze' ? 1 : 0;
+      if (aRank !== bRank) return bRank - aRank;
+      return b.bullScore - a.bullScore;
+    });
+    renderSummary(results, candidates.length);
+    renderResults(results);
+    statusEl.textContent = `완료! ${candidates.length}개 중 ${results.length}개 비상관 코인 발견`;
+
+    // 온체인 거래소 순입출금 (거래량 급등 종목만, 키 있을 때)
+    if (etherscanKey) {
+      const spikes = results.filter(r => r.hasVolSpike);
+      statusEl.textContent = `⛓️ 거래량 급등 ${spikes.length}개 온체인 추적 중...`;
+      let done = 0;
+      for (const r of spikes) {
+        r.onchain = await getOnchainFlow(r.base, r.lastPrice);
+        done++;
+        statusEl.textContent = `⛓️ 온체인 추적 ${done}/${spikes.length} (${r.base})`;
+        renderResults(lastRendered); // 점진 갱신
+      }
+      statusEl.textContent = `완료! ${results.length}개 비상관 · 온체인 ${spikes.length}개 추적`;
+    }
+  } catch (e) {
+    statusEl.textContent = `에러: ${e.message}`;
+  }
+  btn.disabled = false;
+  btn.textContent = '스캔 시작';
+}
+
+let allScanResults = [];
+let activeFilter = 'all';
+let lastScanTotal = 0;
+
+function toggleSummaryFilter(f) {
+  activeFilter = (activeFilter === f) ? 'all' : f;
+  if (activeFilter === 'all') renderResults(allScanResults);
+  else if (activeFilter === 'watch') renderResults(allScanResults.filter(r => isWatched(r.symbol)));
+  else if (activeFilter === 'negCorr') renderResults(allScanResults.filter(r => r.corr < 0));
+  else if (activeFilter === 'volSpike') renderResults(allScanResults.filter(r => r.hasVolSpike));
+  else if (activeFilter === 'strongBuy') {
+    // 강한 매수: 거래량 급등% → OI → 펀딩비(가장 높은) 순 정렬
+    const buys = allScanResults.filter(r => r.strongBuy).sort((a,b) => {
+      if (b.volSpikePct !== a.volSpikePct) return b.volSpikePct - a.volSpikePct;
+      if (b.oiChgPct !== a.oiChgPct) return b.oiChgPct - a.oiChgPct;
+      return b.fundingRate - a.fundingRate;
+    });
+    renderResults(buys);
+  }
+  else if (activeFilter === 'strongShort') {
+    // 강한 숏: 거래량 급등% → OI → 펀딩비(가장 음수) 순 정렬
+    const shorts = allScanResults.filter(r => r.strongShort).sort((a,b) => {
+      if (b.volSpikePct !== a.volSpikePct) return b.volSpikePct - a.volSpikePct;
+      if (b.oiChgPct !== a.oiChgPct) return b.oiChgPct - a.oiChgPct;
+      return a.fundingRate - b.fundingRate;
+    });
+    renderResults(shorts);
+  }
+  // highlight active
+  document.querySelectorAll('#summaryArea .stat').forEach(el => el.classList.remove('active'));
+  if (activeFilter !== 'all') {
+    const idx = activeFilter === 'negCorr' ? 2 : activeFilter === 'volSpike' ? 3 : activeFilter === 'strongBuy' ? 4 : activeFilter === 'strongShort' ? 5 : activeFilter === 'watch' ? 7 : -1;
+    if (idx >= 0) document.querySelectorAll('#summaryArea .stat')[idx]?.classList.add('active');
+  }
+}
+
+function renderSummary(res, total) {
+  allScanResults = [...res];
+  lastScanTotal = total;
+  activeFilter = 'all';
+  const area = document.getElementById('summaryArea');
+  const negCorr = res.filter(r => r.corr < 0).length;
+  const spikeCount = res.filter(r => r.hasVolSpike).length;
+  const avgCorr = res.length ? (res.reduce((a,r) => a + r.corr, 0) / res.length).toFixed(3) : '-';
+  area.innerHTML = `
+    <div class="stat"><div class="val">${total}</div><div class="lbl">분석 코인</div></div>
+    <div class="stat"><div class="val">${res.length}</div><div class="lbl">비상관 코인</div></div>
+    <div class="stat" onclick="toggleSummaryFilter('negCorr')" style="cursor:pointer;border-color:#f59e0b"><div class="val">${negCorr}</div><div class="lbl">역상관 코인</div></div>
+    <div class="stat" onclick="toggleSummaryFilter('volSpike')" style="cursor:pointer;border-color:#f97316;box-shadow:0 0 8px rgba(249,115,22,0.3)"><div class="val" style="color:#fb923c">${spikeCount}</div><div class="lbl">🔥 거래량 급등</div></div>
+    <div class="stat" onclick="toggleSummaryFilter('strongBuy')" style="cursor:pointer;border-color:#4ade80;box-shadow:0 0 8px rgba(74,222,128,0.3)"><div class="val" style="color:#4ade80">${res.filter(r => r.strongBuy).length}</div><div class="lbl">💪 강한 매수</div></div>
+    <div class="stat" onclick="toggleSummaryFilter('strongShort')" style="cursor:pointer;border-color:#ef4444;box-shadow:0 0 8px rgba(239,68,68,0.3)"><div class="val" style="color:#f87171">${res.filter(r => r.strongShort).length}</div><div class="lbl">📉 강한 숏</div></div>
+    <div class="stat" onclick="showAltSeason()" style="cursor:pointer;border-color:#a78bfa;box-shadow:0 0 8px rgba(167,139,250,0.3)"><div class="val" style="color:${altSeasonData?(altSeasonData.verdictCls==='alt-on'?'#4ade80':altSeasonData.verdictCls==='alt-good'?'#86efac':altSeasonData.verdictCls==='alt-neutral'?'#fbbf24':'#f87171'):'#a78bfa'};font-size:15px;white-space:nowrap">${altSeasonData?altSeasonData.verdict:'로딩...'}</div><div class="lbl">📊 알트장 신호 (클릭)</div></div>
+    <div class="stat" onclick="toggleSummaryFilter('watch')" style="cursor:pointer;border-color:#fbbf24;box-shadow:0 0 8px rgba(251,191,36,0.3)"><div class="val" style="color:#fbbf24"><span id="watchCount">${res.filter(r => isWatched(r.symbol)).length}</span></div><div class="lbl">⭐ 관심종목</div></div>
+  `;
+}
+
+function fmtNum(n, d=2) {
+  if (Math.abs(n) >= 1e9) return (n/1e9).toFixed(d) + 'B';
+  if (Math.abs(n) >= 1e6) return (n/1e6).toFixed(d) + 'M';
+  if (Math.abs(n) >= 1e3) return (n/1e3).toFixed(d) + 'K';
+  return n.toFixed(d);
+}
+// 선물(OI) vs 온체인(현물) 신호 비교 해설
+function getFlowComment(r) {
+  if (!r.onchain) return null;
+  const onOut = r.onchain.netOutUsd > 0;  // 거래소 순유출 = 현물 매집
+  const onIn = r.onchain.netOutUsd < 0;   // 거래소 순유입 = 현물 매도
+  if (r.strongBuy && onIn) return { txt: '⚠️ 선물 롱 vs 현물 매도 — 단기 반등이나 위에서 매물 대기, 경계', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' };
+  if (r.strongShort && onOut) return { txt: '⚠️ 선물 숏 vs 현물 매집 — 큰손은 담는 중, 숏 반등 주의', color: '#fbbf24', bg: 'rgba(251,191,36,0.1)' };
+  if (r.strongBuy && onOut) return { txt: '✅ 선물 롱 + 현물 매집 — 매수 신호 일치(강함)', color: '#4ade80', bg: 'rgba(74,222,128,0.1)' };
+  if (r.strongShort && onIn) return { txt: '✅ 선물 숏 + 현물 매도 — 매도 신호 일치(강함)', color: '#f87171', bg: 'rgba(248,113,113,0.1)' };
+  return null;
+}
+
+function fmtUsd(n) {
+  const a = Math.abs(n);
+  if (a >= 1e9) return '$' + (n/1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return '$' + (n/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return '$' + (n/1e3).toFixed(1) + 'K';
+  return '$' + Math.round(n);
+}
+
+let lastRendered = [];
+function renderResults(res) {
+  lastRendered = res;
+  if (currentView === 'card') renderCards(res);
+  else renderTable(res);
+}
+
+function renderCards(res) {
+  const grid = document.getElementById('cardView');
+  Object.values(chartInstances).forEach(c => c.destroy());
+  chartInstances = {};
+
+  if (!res.length) { grid.innerHTML = '<div class="no-results">조건에 맞는 코인이 없습니다. 기준을 조정해 보세요.</div>'; return; }
+
+  grid.innerHTML = res.map((r, i) => `
+    <div class="coin-card${r.corr < 0 ? ' highlight' : ''}${r.hasVolSpike ? ' vol-spike' : ''}">
+      <div class="coin-header">
+        <div class="coin-name"><span onclick="toggleWatch('${r.symbol}', ${r.lastPrice}, event)" style="cursor:pointer;font-size:17px;margin-right:5px;color:${isWatched(r.symbol) ? '#fbbf24' : '#475569'};vertical-align:middle" title="관심종목">${isWatched(r.symbol) ? '★' : '☆'}</span>${r.base}<small>/USDT</small>${(() => { const ch = getCoinChains(r.base); return ch.length ? ' ' + ch.map(c => `<span style="font-size:9px;font-weight:700;color:#94a3b8;background:#1e293b;padding:1px 5px;border-radius:3px;vertical-align:middle">${c}</span>`).join(' ') : ''; })()} <span class="score-btn" onclick="event.stopPropagation();showScore(${i})" style="font-size:12px; padding:2px 6px; border-radius:4px; font-weight:700; background:${r.bullScore >= 50 ? '#166534' : r.bullScore >= 30 ? '#14532d' : r.bullScore >= 10 ? '#1e3a1e' : r.bullScore >= 0 ? '#1e293b' : '#451a1a'}; color:${r.bullScore >= 30 ? '#4ade80' : r.bullScore >= 10 ? '#86efac' : r.bullScore >= 0 ? '#94a3b8' : '#f87171'}">${r.bullScore}점</span>${(() => { const w = getWatch(r.symbol); if (!w || !w.date || !w.price) return ''; const ret = (r.lastPrice - w.price) / w.price * 100; return `<span style="font-size:11px;margin-left:8px;color:#8892a4">⭐${w.date.slice(5)} 등록 · <b style="color:${ret>=0?'#4ade80':'#f87171'}">${ret>=0?'+':''}${ret.toFixed(1)}%</b></span>`; })()}</div>
+        <div class="coin-badges">
+          ${r.strongBuy ? `<span class="badge ma-just">💪 강한 매수<span class="tip">OI 증가 + 펀딩비 양수 = 롱 진입 활발${r.todayReturn >= 0 ? ' (양봉 동반)' : ' (음봉 — 저점 매집 가능)'}</span></span>` : ''}
+          ${r.strongShort ? `<span class="badge" style="background:#7f1d1d;color:#fca5a5;animation:pulse 1.5s infinite">📉 강한 숏<span class="tip">OI 증가 + 펀딩비 숏우세 = 숏 진입 활발${r.todayReturn < 0 ? ' (음봉 동반)' : ' (양봉 — 숏스퀴즈 주의)'}</span></span>` : ''}
+          ${r.onchain ? `<span class="badge" style="background:${r.onchain.netOutUsd >= 0 ? '#14532d' : '#451a1a'};color:${r.onchain.netOutUsd >= 0 ? '#4ade80' : '#f87171'}">⛓️ ${r.onchain.netOutUsd >= 0 ? '순유출' : '순유입'} ${fmtUsd(Math.abs(r.onchain.netOutUsd))}${r.onchain.pctMcap != null ? ` (시총 ${r.onchain.pctMcap.toFixed(2)}%)` : ''}<span class="tip">7일 바이낸스 핫월렛 ${r.onchain.netOutUsd >= 0 ? '순유출(매집 정황) — 거래소 밖으로 빠져나감' : '순유입(매도 정황) — 거래소로 들어옴'}<br>유출 ${fmtUsd(r.onchain.outUsd)} / 유입 ${fmtUsd(r.onchain.inUsd)}${r.onchain.pctMcap != null ? `<br>시총 대비 ${r.onchain.pctMcap.toFixed(2)}% ${r.onchain.pctMcap >= 1 ? '(영향력 큼)' : '(미미)'}` : ''}</span></span>` : ''}
+          <span class="badge corr">ρ = ${r.corr.toFixed(3)}<span class="tip">BTC와의 상관계수 (${Math.abs(r.corr) < 0.1 ? '거의 무관' : (Math.abs(r.corr) < 0.3 ? '약한 ' : Math.abs(r.corr) < 0.5 ? '보통 ' : Math.abs(r.corr) < 0.7 ? '강한 ' : '매우 강한 ') + (r.corr < 0 ? '역상관' : '상관')})</span></span>
+          ${r.hasVolSpike ? `<span class="badge vol-spike">🔥 거래량 +${r.volSpikePct.toFixed(0)}%<span class="tip">3일 평균 거래량이 ${volPeriodLabel} 평균 대비 ${r.volSpikePct.toFixed(0)}% 급등</span></span>` : `<span class="badge ${r.volSpikePct >= 0 ? 'vol-up' : 'vol-down'}">거래량 ${r.volSpikePct >= 0 ? '+' : ''}${r.volSpikePct.toFixed(0)}%<span class="tip">3일 평균 거래량 vs ${volPeriodLabel} 평균 변화율</span></span>`}
+          <span class="badge ${r.todayReturn >= 0 ? 'vol-up' : 'vol-down'}">오늘 ${r.todayReturn >= 0 ? '+' : ''}${r.todayReturn.toFixed(1)}%<span class="tip">오늘 하루 수익률 (전일 종가 대비)</span></span>
+          ${r.maJustAligned ? '<span class="badge ma-just">🚀 정배열 전환<span class="tip">5일 > 10일 > 20일 이평선 정배열로 오늘 전환됨</span></span>' : r.maAligned ? '<span class="badge ma-aligned">📈 정배열<span class="tip">5일 > 10일 > 20일 이평선 정배열 유지 중</span></span>' : ''}
+          ${r.oiSignal.label ? `<span class="badge ${r.oiSignal.cls}">${r.oiSignal.emoji} ${r.oiSignal.label}<span class="tip">${r.oiSignal.cls === 'oi-squeeze' ? 'OI 증가 + 숏 과밀집 → 급등 시 숏 연쇄청산 가능' : r.oiSignal.cls === 'oi-overheat' ? 'OI 증가 + 롱 과밀집 → 하락 시 롱 연쇄청산 위험' : r.oiSignal.cls === 'oi-bull' ? 'OI 증가 + 롱 우세 → 건강한 상승 추세' : r.oiSignal.cls === 'oi-bear' ? 'OI 증가 + 숏 우세 → 하락 추세' : 'OI 감소 → 포지션 정리 중, 관망세'}</span></span>` : ''}
+          ${r.whaleRatio >= 30 ? `<span class="badge whale">🐋 고래 ${r.whaleRatio.toFixed(0)}%<span class="tip">최근 500건 체결 중 $1,000+ 대형주문 비중 ${r.whaleRatio.toFixed(0)}%</span></span>` : ''}
+        </div>
+      </div>
+      <div class="coin-stats">
+        <span>가격 <span class="v">$${r.lastPrice < 1 ? r.lastPrice.toPrecision(4) : fmtNum(r.lastPrice)}</span></span>
+        <span>3일 평균 손익 <span class="v" style="color:${r.avg3Return >= 0 ? '#4ade80' : '#f87171'}; background:${r.avg3Return >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)'}; padding:1px 5px; border-radius:3px">${r.avg3Return >= 0 ? '▲' : '▼'} ${r.avg3Return >= 0 ? '+' : ''}${r.avg3Return.toFixed(1)}%</span></span>
+        <span>3일 평균 거래량 <span class="v">${fmtNum(r.avg3Vol)}</span></span>
+        <span>${volPeriodLabel} 평균 거래량 <span class="v">${fmtNum(r.avg30Vol)}</span></span>
+      </div>
+      <div class="coin-extra">
+        ${r.hasFutures ? `
+          <span class="tag">OI(24h) <span class="v" style="color:${r.oiChgPct >= 0 ? '#4ade80' : '#f87171'}; background:${r.oiChgPct >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)'}; padding:1px 5px; border-radius:3px">${r.oiChgPct >= 0 ? '▲' : '▼'} ${r.oiChgPct >= 0 ? '+' : ''}${r.oiChgPct.toFixed(1)}%</span></span>
+          <span class="tag">펀딩비 <span class="v" style="color:${r.fundingRate >= 0 ? '#4ade80' : '#f87171'}; background:${r.fundingRate >= 0 ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)'}; padding:1px 5px; border-radius:3px">${r.fundingRate >= 0 ? '▲' : '▼'} ${(r.fundingRate * 100).toFixed(4)}%</span> <span style="color:${getFundingLabel(r.fundingRate).color};font-size:10px;font-weight:700">${getFundingLabel(r.fundingRate).txt}</span></span>
+        ` : '<span class="tag">선물 <span class="v">없음</span></span>'}
+        <span class="tag">대형주문($1K+) <span class="v">${r.whaleRatio.toFixed(1)}% (${r.whaleCount}건)</span></span>
+        ${r.whaleCount > 0 ? `<span class="tag" style="min-width:80px">매수/매도<div class="whale-bar"><div class="buy" style="width:${r.whaleBuyVol + r.whaleSellVol > 0 ? (r.whaleBuyVol / (r.whaleBuyVol + r.whaleSellVol) * 100).toFixed(0) : 50}%"></div><div class="sell" style="width:${r.whaleBuyVol + r.whaleSellVol > 0 ? (r.whaleSellVol / (r.whaleBuyVol + r.whaleSellVol) * 100).toFixed(0) : 50}%"></div></div></span>` : ''}
+      </div>
+      ${(() => { const c = getFlowComment(r); return c ? `<div style="font-size:11px;font-weight:600;color:${c.color};background:${c.bg};padding:6px 10px;border-radius:6px;margin-bottom:8px">${c.txt}</div>` : ''; })()}
+      ${(r.onchain && r.onchain.whales && r.onchain.whales.length) ? `<div style="font-size:10px;color:#8892a4;margin-bottom:8px;line-height:1.6">${r.onchain.side==='recv'?'🐋 매집(거래소 출금 수신) TOP':'📤 매도(거래소 입금 송신) TOP'}: ${r.onchain.whales.map(w => `<a href="https://etherscan.io/address/${w.addr}" target="_blank" style="color:${w.isWhale?'#fbbf24':'#94a3b8'};text-decoration:none">${w.addr.slice(0,6)}…${w.addr.slice(-4)} <b>${r.onchain.side==='recv'?`(보유 ${w.balPct.toFixed(2)}%${w.isWhale?' 🐋':''})`:`(${fmtUsd(w.amtUsd)})`}</b></a>`).join(' · ')}</div>` : ''}
+      <div class="chart-wrap" style="cursor:pointer" onclick="window.open('https://www.tradingview.com/chart/WjXriYBc/?symbol=BINANCE:${r.base}USDT','_blank')"><canvas id="chart_${i}"></canvas></div>
+    </div>
+  `).join('');
+
+  res.forEach((r, i) => {
+    const ctx = document.getElementById(`chart_${i}`).getContext('2d');
+    const labels = r.klines.map(k => new Date(k.time).toLocaleDateString('ko', {month:'numeric',day:'numeric'}));
+    chartInstances[i] = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [{
+          label: '가격',
+          data: r.klines.map(k => k.close),
+          borderColor: r.avg3Return >= 0 ? '#4ade80' : '#f87171',
+          backgroundColor: (r.avg3Return >= 0 ? 'rgba(74,222,128,' : 'rgba(248,113,113,') + '0.08)',
+          fill: true, tension: 0.3, pointRadius: 0, borderWidth: 1.5,
+          yAxisID: 'y'
+        }, {
+          label: '거래량',
+          data: r.klines.map(k => k.volume),
+          type: 'bar',
+          backgroundColor: 'rgba(59,130,246,0.25)',
+          borderColor: 'rgba(59,130,246,0.4)',
+          borderWidth: 1,
+          yAxisID: 'y1'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { color: '#555', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: '#1a2035' } },
+          y: { position: 'left', ticks: { color: '#555', font: { size: 10 }, callback: v => '$'+fmtNum(v) }, grid: { color: '#1a2035' } },
+          y1: { position: 'right', ticks: { display: false }, grid: { display: false } }
+        }
+      }
+    });
+  });
+}
+
+function renderTable(res) {
+  const div = document.getElementById('tableView');
+  if (!res.length) { div.innerHTML = '<div class="no-results">조건에 맞는 코인이 없습니다.</div>'; return; }
+  div.innerHTML = `<table>
+    <thead><tr>
+      <th onclick="sortTable('bullScore')">점수</th>
+      <th onclick="sortTable('base')">코인</th>
+      <th onclick="sortTable('corr')">상관계수</th>
+      <th onclick="sortTable('lastPrice')">가격</th>
+      <th onclick="sortTable('avg3Return')">3일 평균 손익</th>
+      <th onclick="sortTable('todayReturn')">오늘 수익률</th>
+      <th onclick="sortTable('avg3Vol')">3일 평균 거래량</th>
+      <th onclick="sortTable('avg30Vol')">${volPeriodLabel} 평균 거래량</th>
+      <th onclick="sortTable('volSpikePct')">급등률</th>
+      <th onclick="sortTable('maAligned')">이평 정배열</th>
+      <th onclick="sortTable('oiChgPct')">OI(24h)</th>
+      <th onclick="sortTable('fundingRate')">펀딩비</th>
+      <th onclick="sortTable('whaleRatio')">고래비중</th>
+    </tr></thead>
+    <tbody>${res.map(r => `<tr${r.hasVolSpike ? ' style="background:#1a1000"' : ''}>
+      <td class="${r.bullScore >= 30 ? 'pos' : r.bullScore < 0 ? 'neg' : ''}" style="font-weight:700">${r.bullScore}</td>
+      <td><a href="https://www.tradingview.com/chart/WjXriYBc/?symbol=BINANCE:${r.base}USDT" target="_blank" style="color:#60a5fa;text-decoration:none"><strong>${r.base}</strong>/USDT</a> ${r.hasVolSpike ? '🔥' : ''}</td>
+      <td class="${r.corr < 0 ? 'neg' : ''}">${r.corr.toFixed(3)}</td>
+      <td>$${r.lastPrice < 1 ? r.lastPrice.toPrecision(4) : fmtNum(r.lastPrice)}</td>
+      <td class="${r.avg3Return >= 0 ? 'pos' : 'neg'}">${r.avg3Return >= 0 ? '+' : ''}${r.avg3Return.toFixed(1)}%</td>
+      <td class="${r.todayReturn >= 0 ? 'pos' : 'neg'}">${r.todayReturn >= 0 ? '+' : ''}${r.todayReturn.toFixed(1)}%</td>
+      <td>${fmtNum(r.avg3Vol)}</td>
+      <td>${fmtNum(r.avg30Vol)}</td>
+      <td class="${r.volSpikePct >= 200 ? 'pos' : r.volSpikePct >= 0 ? '' : 'neg'}" style="${r.hasVolSpike ? 'font-weight:700' : ''}">${r.volSpikePct >= 0 ? '+' : ''}${r.volSpikePct.toFixed(0)}%</td>
+      <td class="${r.maAligned ? 'pos' : ''}">${r.maJustAligned ? '🚀 전환' : r.maAligned ? '📈 정배열' : '-'}</td>
+      <td class="${r.oiChgPct >= 0 ? 'pos' : 'neg'}">${r.hasFutures ? (r.oiChgPct >= 0 ? '▲+' : '▼') + r.oiChgPct.toFixed(1) + '%' : '-'}</td>
+      <td class="${r.fundingRate >= 0 ? 'pos' : 'neg'}">${r.hasFutures ? (r.fundingRate >= 0 ? '▲ ' : '▼ ') + (r.fundingRate * 100).toFixed(4) + '%' : '-'}</td>
+      <td>${r.whaleRatio.toFixed(1)}%${r.whaleCount > 0 ? ' 🐋' : ''}</td>
+    </tr>`).join('')}</tbody></table>`;
+}
+
+let sortKey = 'corr', sortAsc = true;
+function sortTable(key) {
+  if (sortKey === key) sortAsc = !sortAsc; else { sortKey = key; sortAsc = true; }
+  results.sort((a,b) => {
+    const va = a[key], vb = b[key];
+    return sortAsc ? (va > vb ? 1 : -1) : (va < vb ? 1 : -1);
+  });
+  renderTable(results);
+}
+
+function fmtScore(v, max) {
+  const color = v > 0 ? '#4ade80' : v < 0 ? '#f87171' : '#94a3b8';
+  return `<span style="color:${color};font-weight:700">${v > 0 ? '+' : ''}${v}</span><span style="color:#555">/${max}</span>`;
+}
+
+function showScore(idx) {
+  const r = results[idx];
+  const sd = r.scoreDetail;
+  document.getElementById('scoreContent').innerHTML = `
+    <div class="title">${r.base}/USDT 상승 가능성 배점</div>
+    <table>
+      <tr><th>항목</th><th>현재 값</th><th style="text-align:right">배점</th></tr>
+      <tr><td>오늘 수익률</td><td>${r.todayReturn >= 0 ? '+' : ''}${r.todayReturn.toFixed(1)}%</td><td style="text-align:right">${fmtScore(sd.today, 15)}</td></tr>
+      <tr><td>3일 평균 손익</td><td>${r.avg3Return >= 0 ? '+' : ''}${r.avg3Return.toFixed(1)}%</td><td style="text-align:right">${fmtScore(sd.avg3, 20)}</td></tr>
+      <tr><td>이평선 정배열</td><td>${r.maJustAligned ? '🚀 전환' : r.maAligned ? '📈 유지' : '❌ 없음'}</td><td style="text-align:right">${fmtScore(sd.ma, 15)}</td></tr>
+      <tr><td>거래량 변화</td><td>${r.volSpikePct >= 0 ? '+' : ''}${r.volSpikePct.toFixed(0)}%</td><td style="text-align:right">${fmtScore(sd.vol, 15)}</td></tr>
+      <tr><td>OI 변화(24h)</td><td>${r.hasFutures ? (r.oiChgPct >= 0 ? '+' : '') + r.oiChgPct.toFixed(1) + '%' : '선물 없음'}</td><td style="text-align:right">${fmtScore(sd.oi, 10)}</td></tr>
+      <tr><td>펀딩비</td><td>${r.hasFutures ? (r.fundingRate * 100).toFixed(4) + '%' : '선물 없음'}</td><td style="text-align:right">${fmtScore(sd.fr, 10)}</td></tr>
+      <tr><td>숏스퀴즈</td><td>${sd.squeeze > 0 ? '🔥 가능' : '-'}</td><td style="text-align:right">${fmtScore(sd.squeeze, 10)}</td></tr>
+      <tr><td>고래 비중</td><td>${r.whaleRatio.toFixed(1)}% (${r.whaleCount}건)</td><td style="text-align:right">${fmtScore(sd.whale, 5)}</td></tr>
+      <tr class="total"><td colspan="2" style="padding-top:10px">합계</td><td style="text-align:right;padding-top:10px;color:${r.bullScore >= 30 ? '#4ade80' : r.bullScore >= 0 ? '#94a3b8' : '#f87171'}">${r.bullScore} / 100</td></tr>
+    </table>`;
+  document.getElementById('scoreOverlay').style.display = 'block';
+  document.getElementById('scorePopup').style.display = 'block';
+}
+
+function closeScorePopup() {
+  document.getElementById('scoreOverlay').style.display = 'none';
+  document.getElementById('scorePopup').style.display = 'none';
+}
+
+async function searchCoin() {
+  const input = document.getElementById('searchCoin').value.trim().toUpperCase();
+  if (!input) return;
+  const symbol = input.endsWith('USDT') ? input : input + 'USDT';
+  const base = input.replace('USDT','');
+
+  const statusEl = document.getElementById('statusText');
+  statusEl.textContent = `${base} 분석 중...`;
+
+  try {
+    const period = +document.getElementById('period').value;
+    volPeriodLabel = period + '일';
+
+    // BTC 데이터
+    const btcKlines = await getKlines('BTCUSDT', '1d', period + 1);
+    const btcReturns = toReturns(btcKlines.map(k => k.close));
+
+    // 코인 데이터
+    const klines = await getKlines(symbol, '1d', period + 1);
+    if (!klines || klines.length < 10) { statusEl.textContent = `❌ ${symbol} 데이터를 찾을 수 없습니다`; return; }
+
+    const returns = toReturns(klines.map(k => k.close));
+    const corr = pearsonCorrelation(btcReturns, returns);
+
+    const lastPrice = klines[klines.length-1].close;
+    const firstPrice = klines[0].close;
+    const chgPct = ((lastPrice - firstPrice) / firstPrice) * 100;
+
+    const vols = klines.map(k => k.volume);
+    const recent3 = vols.slice(-3);
+    const prevN = vols.slice(-(period+3), -3);
+    const avg3 = recent3.reduce((a,b) => a+b, 0) / recent3.length;
+    const avg30 = prevN.length >= 3 ? prevN.reduce((a,b) => a+b, 0) / prevN.length : 0;
+    const volSpikePct = avg30 > 0 ? ((avg3 - avg30) / avg30) * 100 : 0;
+    const volSpikeThreshold = +document.getElementById('volSpikeThreshold').value;
+    const hasVolSpike = volSpikePct >= volSpikeThreshold;
+
+    const tickers = await fetchJSON(`${BINANCE_API}/ticker/24hr?symbol=${symbol}`);
+    const vol24h = +tickers.quoteVolume || 0;
+    const avgDailyVol = vols.reduce((a,b) => a+b, 0) / vols.length;
+
+    const closes = klines.map(k => k.close);
+    const last3Returns = [];
+    for (let j = closes.length - 3; j < closes.length; j++) {
+      if (j > 0) last3Returns.push((closes[j] - closes[j-1]) / closes[j-1] * 100);
+    }
+    const avg3Return = last3Returns.length ? last3Returns.reduce((a,b) => a+b, 0) / last3Returns.length : 0;
+    const todayReturn = closes.length >= 2 ? (closes[closes.length-1] - closes[closes.length-2]) / closes[closes.length-2] * 100 : 0;
+
+    const calcMA = (arr, p) => arr.length < p ? null : arr.slice(-p).reduce((a,b) => a+b, 0) / p;
+    const ma5 = calcMA(closes, 5), ma10 = calcMA(closes, 10), ma20 = calcMA(closes, 20);
+    const maAligned = (ma5 && ma10 && ma20) && (ma5 > ma10 && ma10 > ma20);
+    const closesYd = closes.slice(0, -1);
+    const ma5y = calcMA(closesYd, 5), ma10y = calcMA(closesYd, 10), ma20y = calcMA(closesYd, 20);
+    const maAlignedYd = (ma5y && ma10y && ma20y) && (ma5y > ma10y && ma10y > ma20y);
+    const maJustAligned = maAligned && !maAlignedYd;
+
+    const [futuresData, whaleData] = await Promise.all([
+      getFuturesData(symbol),
+      getWhaleRatio(symbol, lastPrice)
+    ]);
+    const oiSignal = futuresData.hasFutures ? getOISignal(futuresData.oiChgPct, futuresData.fundingRate, todayReturn) : { label: '', emoji: '', cls: '' };
+
+    const r = {
+      symbol, base, corr: corr || 0, klines,
+      lastPrice, chgPct, vol24h, avgDailyVol,
+      avg3Vol: avg3, avg30Vol: avg30, volSpikePct, hasVolSpike,
+      avg3Return, todayReturn, maAligned, maJustAligned, ma5, ma10, ma20,
+      ...futuresData, oiSignal, ...whaleData
+    };
+
+    // 점수 계산
+    const sd = {};
+    sd.today = r.todayReturn >= 10 ? 15 : r.todayReturn >= 5 ? 12 : r.todayReturn >= 0 ? 5 : r.todayReturn >= -5 ? -3 : -10;
+    sd.avg3 = r.avg3Return >= 10 ? 20 : r.avg3Return >= 5 ? 16 : r.avg3Return >= 2 ? 12 : r.avg3Return >= 0 ? 5 : r.avg3Return >= -3 ? -3 : -10;
+    sd.ma = r.maJustAligned ? 15 : r.maAligned ? 10 : 0;
+    sd.vol = r.volSpikePct >= 200 ? 15 : r.volSpikePct >= 100 ? 10 : r.volSpikePct >= 50 ? 5 : r.volSpikePct < -30 ? -5 : 0;
+    sd.oi = 0;
+    if (r.hasFutures) { sd.oi = r.oiChgPct >= 10 ? 10 : r.oiChgPct >= 5 ? 7 : r.oiChgPct >= 0 ? 3 : -3; }
+    sd.fr = 0;
+    if (r.hasFutures) { const fr = r.fundingRate; sd.fr = (fr > 0 && fr <= 0.001) ? 10 : fr > 0.001 ? -5 : fr < -0.0005 ? 5 : fr < 0 ? 2 : 0; }
+    sd.squeeze = r.oiSignal.cls === 'oi-squeeze' ? 10 : 0;
+    sd.whale = r.whaleRatio >= 50 ? 5 : r.whaleRatio >= 30 ? 3 : r.whaleRatio >= 10 ? 1 : 0;
+    r.scoreDetail = sd;
+    r.bullScore = sd.today + sd.avg3 + sd.ma + sd.vol + sd.oi + sd.fr + sd.squeeze + sd.whale;
+    r.strongBuy = r.hasFutures && r.oiChgPct >= 5 && r.fundingRate > 0;
+    r.strongShort = r.hasFutures && r.oiChgPct >= 5 && r.fundingRate < 0;
+
+    // 검색 결과를 맨 앞에 추가하고 렌더링
+    results = [r, ...results.filter(x => x.symbol !== symbol)];
+    renderResults(results);
+    statusEl.textContent = `✅ ${base} 분석 완료 (점수: ${r.bullScore}, 상관계수: ${(r.corr||0).toFixed(3)})`;
+    document.getElementById('cardGrid')?.scrollIntoView({behavior:'smooth'});
+
+    // 온체인 거래소 순입출금 (키 있을 때)
+    if (etherscanKey) {
+      statusEl.textContent = `⛓️ ${base} 온체인 추적 중...`;
+      r.onchain = await getOnchainFlow(r.base, r.lastPrice);
+      renderResults(results);
+      statusEl.textContent = r.onchain
+        ? `✅ ${base} · 온체인 ${r.onchain.netOutUsd>=0?'순유출':'순유입'} ${fmtUsd(Math.abs(r.onchain.netOutUsd))}`
+        : `✅ ${base} 분석 완료 (온체인 데이터 없음 — 컨트랙트 미지원)`;
+    }
+  } catch(e) {
+    statusEl.textContent = `❌ ${symbol} 분석 실패: ${e.message}`;
+  }
+}
+
+// 초기화: 저장된 Etherscan 키 입력란에 표시
+(function initKey(){
+  const el = document.getElementById('etherscanKey');
+  if (el && etherscanKey) el.value = etherscanKey;
+})();
+</script>
+</body>
+</html>
